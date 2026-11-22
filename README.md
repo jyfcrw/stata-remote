@@ -4,9 +4,11 @@ Stata Remote lets agents in WSL run the Stata installation on the Windows host. 
 
 ## Build and install
 
-- Windows requires an activated Stata installation and a project directory the service can read and write. The development machine uses Stata 17 MP at `D:\Stata17\StataMP-64.exe`.
+Download the binaries from [GitHub Releases](https://github.com/jyfcrw/stata-remote/releases). Extract `stata-remote-server.exe` from `stata-remote-server-windows-amd64.zip` on x86-64 Windows 10 or 11. Extract `stata-remote` from `stata-remote-linux-amd64.tar.gz` in x86-64 Ubuntu on WSL and place it on your `PATH`.
+
+- Windows requires an activated Stata installation and a project directory the service can read and write. 
 - WSL requires WSL 2 in NAT mode, the Linux `stata-remote` client, and `rclone`. On Ubuntu, install rclone with `sudo apt install rclone`.
-- Building from source requires Go 1.26 or later. Run these commands from the repository root to build the x86-64 Windows service and Linux client. [Download Go](https://go.dev/dl/)
+- Building from source requires Go 1.26 or later. Run these commands from the repository root to build the x86-64 Windows service and Linux client.
 
 ```bash
 mkdir -p dist
@@ -121,6 +123,16 @@ stata-remote logs "$job_id"
 
 `jobs` lists jobs that are starting or running. `status` returns the requested job's state and result as JSON, including `stata_rc` and `process_exit_code` when available. `logs` reads the log written so far. Completed jobs remain available by ID while the Windows service is running. If the submission response is lost, retry with `do --job-id "$job_id"` and the original script, arguments, and output directory. The service reuses the existing job.
 
+## Agent skill
+
+The [Stata Remote skill](skills/stata-remote/SKILL.md) covers running `.do` files, working with project files through rclone, and recovering jobs by ID. Set up the WSL connection before using the skill.
+
+With Node.js 22.20 or later on WSL, install the skill for Codex across all your projects using the Skills CLI. [Skills CLI reference](https://github.com/vercel-labs/skills/blob/main/docs/commands.md#skills-add)
+
+```bash
+npx skills add jyfcrw/stata-remote --skill stata-remote --agent codex --global --yes
+```
+
 ## Troubleshooting
 
 | Symptom | What to check |
@@ -131,3 +143,16 @@ stata-remote logs "$job_id"
 | Client disconnected | The Windows service manages Stata processes on Windows. Reconnect and use the original job ID to read its status and logs. |
 
 The development machine passed integration testing with the WSL client, Windows service, Stata 17, and rclone through a temporary TCP forwarder. Direct NAT access and recovery after a full `wsl --shutdown` remain to be verified. See the architecture, interfaces, and test coverage in the [Phase 1 design](docs/design.md).
+
+## CI and releases
+
+The [GitHub Actions workflow](.github/workflows/ci.yml) runs the Go tests and `go vet` on Ubuntu and Windows for every push to `main`. The Ubuntu tests run with race detection.
+
+To release, push a `vMAJOR.MINOR.PATCH` tag whose commit is already on `main`. Once the tests pass, Actions builds and publishes both amd64 archives to the same GitHub Release. Push the workflow to `main` before creating the first release tag.
+
+```bash
+git switch main
+git pull --ff-only
+git tag -a v0.1.0 -m 'Release v0.1.0'
+git push origin v0.1.0
+```
